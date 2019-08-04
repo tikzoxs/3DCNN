@@ -1,6 +1,7 @@
 import argparse
 import os
 
+import tensorflow as tf
 import matplotlib
 matplotlib.use('AGG')
 import matplotlib.pyplot as plt
@@ -18,6 +19,15 @@ from sklearn.model_selection import train_test_split
 
 import videoto3d
 from tqdm import tqdm
+
+import train_generator as geny_tr
+import validation_generator as geny_va
+import test_generator as geny_te
+
+LAYER_ACTIVATION = 'relu'
+INPUT_SHAPE = (None, 100, 100, 64)
+
+batch_size = 64
 
 
 def plot_history(history, result_dir):
@@ -55,44 +65,8 @@ def save_history(history, result_dir):
             fp.write('{}\t{}\t{}\t{}\t{}\n'.format(
                 i, loss[i], acc[i], val_loss[i], val_acc[i]))
 
-
-def loaddata(video_dir, vid3d, nclass, result_dir, color=False, skip=True):
-    files = os.listdir(video_dir)
-    X = []
-    labels = []
-    labellist = []
-
-    pbar = tqdm(total=len(files))
-
-    for filename in files:
-        pbar.update(1)
-        if filename == '.DS_Store':
-            continue
-        name = os.path.join(video_dir, filename)
-        label = vid3d.get_UCF_classname(filename)
-        if label not in labellist:
-            if len(labellist) >= nclass:
-                continue
-            labellist.append(label)
-        labels.append(label)
-        X.append(vid3d.video3d(name, color=color, skip=skip))
-
-    pbar.close()
-    with open(os.path.join(result_dir, 'classes.txt'), 'w') as fp:
-        for i in range(len(labellist)):
-            fp.write('{}\n'.format(labellist[i]))
-
-    for num, label in enumerate(labellist):
-        for i in range(len(labels)):
-            if label == labels[i]:
-                labels[i] = num
-    if color:
-        return np.array(X).transpose((0, 2, 3, 4, 1)), labels
-    else:
-        return np.array(X).transpose((0, 2, 3, 1)), labels
-
-
 def main():
+    global batch_size
     parser = argparse.ArgumentParser(
         description='simple 3D convolution for action recognition')
     parser.add_argument('--batch', type=int, default=128)
@@ -106,31 +80,11 @@ def main():
     parser.add_argument('--depth', type=int, default=10)
     args = parser.parse_args()
 
-    img_rows, img_cols, frames = 32, 32, args.depth
-    channel = 3 if args.color else 1
-    fname_npz = 'dataset_{}_{}_{}.npz'.format(
-        args.nclass, args.depth, args.skip)
-
-    vid3d = videoto3d.Videoto3D(img_rows, img_cols, frames)
     nb_classes = args.nclass
-    if os.path.exists(fname_npz):
-        loadeddata = np.load(fname_npz)
-        X, Y = loadeddata["X"], loadeddata["Y"]
-    else:
-        x, y = loaddata(args.videos, vid3d, args.nclass,
-                        args.output, args.color, args.skip)
-        X = x.reshape((x.shape[0], img_rows, img_cols, frames, channel))
-        Y = np_utils.to_categorical(y, nb_classes)
-
-        X = X.astype('float32')
-        np.savez(fname_npz, X=X, Y=Y)
-        print('Saved dataset to dataset.npz.')
-    print('X_shape:{}\nY_shape:{}'.format(X.shape, Y.shape))
 
     # Define model
     model = Sequential()
-    model.add(Conv3D(32, kernel_size=(3, 3, 3), input_shape=(
-        X.shape[1:]), border_mode='same'))
+    model.add(Conv3D(32, kernel_size=(3, 3, 3), input_shape=(1, 256, 384, 64), border_mode='same'))
     model.add(Activation('relu'))
     model.add(Conv3D(32, kernel_size=(3, 3, 3), border_mode='same'))
     model.add(Activation('softmax'))
@@ -152,17 +106,24 @@ def main():
     model.compile(loss=categorical_crossentropy,
                   optimizer=Adam(), metrics=['accuracy'])
     model.summary()
-    plot_model(model, show_shapes=True,
-               to_file=os.path.join(args.output, 'model.png'))
+    # plot_model(model, show_shapes=True,
+    #            to_file=os.path.join(args.output, 'model.png'))
 
-    X_train, X_test, Y_train, Y_test = train_test_split(
-        X, Y, test_size=0.2, random_state=43)
+    # checkpointer = ModelCheckpoint(filepath="/result_dir/weights.hdf5", verbose=1, save_best_only=True)
+    # cp_callback = tf.keras.callbacks.ModelCheckpoint("./weights.{epoch:02d}.hdf5",
+    #                                       save_weights_only=True,
+    #                                       verbose=1)
+    cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath="/home/tkal976/Desktop/Black/Codes/git/3DCNN/result_dir/weights.hd5",
+                                          save_weights_only=True,
+                                          verbose=1)    
+    batch_size = args.batch
+    train_gen = geny_tr.train_generator(batch_size)
+    val_gen = geny_va.validation_generator(batch_size)
+    test_gen = geny_te.test_generator(batch_size)
 
-    checkpointer = ModelCheckpoint(filepath="/result_dir/weights.hdf5", verbose=1, save_best_only=True)
+    history = model.fit_generator(train_gen(), steps_per_epoch=100, epochs=args.epoch, callbacks=[cp_callback], validation_data=val_gen(), validation_steps=5, class_weight=None, max_queue_size=10, workers=1, use_multiprocessing=False, shuffle=True, initial_epoch=49)
 
-    history = model.fit(X_train, Y_train, validation_data=(X_test, Y_test), batch_size=args.batch,
-                        epochs=args.epoch, verbose=1, shuffle=True)
-    model.evaluate(X_test, Y_test, verbose=0)
+    model.evaluate_generator(test_gen, steps=20, callbacks=None, max_queue_size=10, workers=1, use_multiprocessing=False, verbose=0)
     model_json = model.to_json()
     if not os.path.isdir(args.output):
         os.makedirs(args.output)
