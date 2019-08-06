@@ -17,7 +17,7 @@ from keras.utils import np_utils
 from keras.utils.vis_utils import plot_model
 from sklearn.model_selection import train_test_split
 
-import videoto3d
+# import videoto3d
 from tqdm import tqdm
 
 import train_generator as geny_tr
@@ -84,7 +84,7 @@ def main():
 
     # Define model
     model = Sequential()
-    model.add(Conv3D(32, kernel_size=(3, 3, 3), input_shape=(1, 256, 384, 64), border_mode='same'))
+    model.add(Conv3D(32, kernel_size=(3, 3, 3), input_shape=(1, 256, 384, 64), border_mode='same', name='new_input'))
     model.add(Activation('relu'))
     model.add(Conv3D(32, kernel_size=(3, 3, 3), border_mode='same'))
     model.add(Activation('softmax'))
@@ -99,9 +99,9 @@ def main():
     model.add(Dropout(0.25))
 
     model.add(Flatten())
-    model.add(Dense(512, activation='sigmoid'))
+    model.add(Dense(512, activation='sigmoid', name='new_dense_1'))
     model.add(Dropout(0.5))
-    model.add(Dense(nb_classes, activation='softmax'))
+    model.add(Dense(nb_classes, activation='softmax', name='new_output'))
 
     model.compile(loss=categorical_crossentropy,
                   optimizer=Adam(), metrics=['accuracy'])
@@ -113,7 +113,9 @@ def main():
     # cp_callback = tf.keras.callbacks.ModelCheckpoint("./weights.{epoch:02d}.hdf5",
     #                                       save_weights_only=True,
     #                                       verbose=1)
-    cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath="/home/tkal976/Desktop/Black/Codes/git/3DCNN/result_dir/weights.hd5",
+    model.load_weights("/people/tkal976/aeye/result_dir/initial.hd5", by_name=True)
+
+    cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath="/people/tkal976/aeye/result_dir/weights_1.hd5",
                                           save_weights_only=True,
                                           verbose=1)    
     batch_size = args.batch
@@ -121,17 +123,17 @@ def main():
     val_gen = geny_va.validation_generator(batch_size)
     test_gen = geny_te.test_generator(batch_size)
 
-    history = model.fit_generator(train_gen(), steps_per_epoch=100, epochs=args.epoch, callbacks=[cp_callback], validation_data=val_gen(), validation_steps=5, class_weight=None, max_queue_size=10, workers=1, use_multiprocessing=False, shuffle=True, initial_epoch=49)
+    history = model.fit_generator(train_gen(), steps_per_epoch=int(6400/batch_size), epochs=args.epoch, callbacks=[cp_callback], validation_data=val_gen(), validation_steps=5, class_weight=None, max_queue_size=10, workers=1, use_multiprocessing=False, shuffle=True, initial_epoch=49)
 
-    model.evaluate_generator(test_gen, steps=20, callbacks=None, max_queue_size=10, workers=1, use_multiprocessing=False, verbose=0)
+    model.evaluate_generator(test_gen(), steps=8, max_queue_size=10, workers=1, use_multiprocessing=False, verbose=0)
     model_json = model.to_json()
     if not os.path.isdir(args.output):
         os.makedirs(args.output)
-    with open(os.path.join(args.output, 'ucf101_3dcnnmodel.json'), 'w') as json_file:
+    with open(os.path.join(args.output, 'aeye_3dcnnmodel.json'), 'w') as json_file:
         json_file.write(model_json)
-    model.save_weights(os.path.join(args.output, 'ucf101_3dcnnmodel.hd5'))
+    model.save_weights(os.path.join(args.output, 'aeye_3dcnnmodel.hd5'))
 
-    loss, acc = model.evaluate(X_test, Y_test, verbose=0)
+    loss, acc = model.evaluate_generator(test_gen(), steps=8, max_queue_size=10, workers=1, use_multiprocessing=False, verbose=0)
     print('Test loss:', loss)
     print('Test accuracy:', acc)
     plot_history(history, args.output)

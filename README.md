@@ -40,7 +40,7 @@ You can see more information by using `--help` option
 You can execute like the following:
 ```sh
 python 3dcnn.py --batch 32 --epoch 50 --videos dataset/ --nclass 10 --output 3dcnnresult/ --color True --skip False --depth 15
-python aeye.py --batch 2 --epoch 50 --nclass 4 --output aeye_result/ --color True --skip False --depth 15
+python aeye.py --batch 64 --epoch 75 --nclass 3 --output aeye_result/ --color True --skip False --depth 15
 ```
 
 You can generate the input image which maximizes 0th output of layer named 'dense\_2' like this:
