@@ -84,9 +84,16 @@ def main():
 
     # Define model
     model = Sequential()
-    model.add(Conv3D(32, kernel_size=(3, 3, 3), input_shape=(1, 256, 384, 64), border_mode='same', name='new_input'))
+    model.add(Conv3D(32, kernel_size=(3, 3, 15), input_shape=(128,192,64, 1), border_mode='same', name='new_input'))
     model.add(Activation('relu'))
-    model.add(Conv3D(32, kernel_size=(3, 3, 3), border_mode='same'))
+    model.add(Conv3D(32, kernel_size=(3, 3, 3), border_mode='same', trainable = False))
+    model.add(Activation('softmax'))
+    model.add(MaxPooling3D(pool_size=(3, 3, 3), border_mode='same'))
+    model.add(Dropout(0.25))
+
+    model.add(Conv3D(64, kernel_size=(3, 3, 3), border_mode='same', trainable = False))
+    model.add(Activation('relu'))
+    model.add(Conv3D(64, kernel_size=(3, 3, 3), border_mode='same', trainable = False))
     model.add(Activation('softmax'))
     model.add(MaxPooling3D(pool_size=(3, 3, 3), border_mode='same'))
     model.add(Dropout(0.25))
@@ -99,7 +106,7 @@ def main():
     model.add(Dropout(0.25))
 
     model.add(Flatten())
-    model.add(Dense(512, activation='sigmoid', name='new_dense_1'))
+    model.add(Dense(256, activation='sigmoid', name='new_dense_1'))
     model.add(Dropout(0.5))
     model.add(Dense(nb_classes, activation='softmax', name='new_output'))
 
@@ -113,9 +120,13 @@ def main():
     # cp_callback = tf.keras.callbacks.ModelCheckpoint("./weights.{epoch:02d}.hdf5",
     #                                       save_weights_only=True,
     #                                       verbose=1)
-    model.load_weights("/people/tkal976/aeye/result_dir/initial.hd5", by_name=True)
 
-    cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath="/people/tkal976/aeye/result_dir/weights_1.hd5",
+    # result_direct = "/people/tkal976/aeye/result_dir/"
+    result_direct = "/home/tkal976/Desktop/Black/Codes/git/3DCNN/result_dir/"
+    # model.load_weights(result_direct + "initial.hd5", by_name=True)
+    
+
+    cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=result_direct + "aeye_weights_3_blocks.hd5",
                                           save_weights_only=True,
                                           verbose=1)    
     batch_size = args.batch
@@ -123,9 +134,13 @@ def main():
     val_gen = geny_va.validation_generator(batch_size)
     test_gen = geny_te.test_generator(batch_size)
 
-    history = model.fit_generator(train_gen(), steps_per_epoch=int(6400/batch_size), epochs=args.epoch, callbacks=[cp_callback], validation_data=val_gen(), validation_steps=5, class_weight=None, max_queue_size=10, workers=1, use_multiprocessing=False, shuffle=True, initial_epoch=49)
+    '''np.floor(5275/batch_size)'''
+    '''np.floor(339/batch_size)'''
+    '''np.floor(544/batch_size)'''
+    history = model.fit_generator(train_gen(), steps_per_epoch=np.floor(5275/batch_size), epochs=args.epoch, callbacks=[cp_callback], validation_data=val_gen(),
+        validation_steps=np.floor(339/batch_size), class_weight=None, max_queue_size=10, workers=1, use_multiprocessing=False, shuffle=True, initial_epoch=49)
 
-    model.evaluate_generator(test_gen(), steps=8, max_queue_size=10, workers=1, use_multiprocessing=False, verbose=0)
+    model.evaluate_generator(test_gen(), steps=np.floor(544/batch_size), max_queue_size=10, workers=1, use_multiprocessing=False, verbose=0)
     model_json = model.to_json()
     if not os.path.isdir(args.output):
         os.makedirs(args.output)
